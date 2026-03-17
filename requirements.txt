@@ -3,4 +3,4 @@ python-dotenv
 requests
 langgraph>=0.2.0
 python-pptx
-streamlit
+streamlit>=1.40.0
