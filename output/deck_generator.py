@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 from pptx import Presentation
@@ -96,6 +97,23 @@ def _add_bullet_list(slide, items: list[str], top_offset=Inches(1.3),
         run.font.color.rgb = DARK_GRAY
 
 
+def _clean_text(text: str) -> str:
+    """Strip markdown syntax so slides show clean plain text."""
+    # Remove ### headers (keep the text after the hashes)
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    # Remove **bold** and *italic* markers, keep content
+    text = re.sub(r'\*{1,2}([^*\n]+)\*{1,2}', r'\1', text)
+    # Remove citation markers like [1], [2][3]
+    text = re.sub(r'(\[\d+\])+', '', text)
+    # Remove markdown links [text](url) → keep text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    # Remove horizontal rules
+    text = re.sub(r'^-{3,}\s*$', '', text, flags=re.MULTILINE)
+    # Collapse 3+ blank lines to 2
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def _truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
@@ -164,7 +182,7 @@ def _slide_02_exec_summary(prs: Presentation, state: dict):
     key_finding = ""
     if benchmark_results:
         first_key = next(iter(benchmark_results))
-        key_finding = _truncate(benchmark_results[first_key], 200)
+        key_finding = _truncate(_clean_text(benchmark_results[first_key]), 200)
 
     lines = ["Key Recommendations:"]
     for i, rec in enumerate(top3, 1):
@@ -221,7 +239,7 @@ def _slide_05_market_intel(prs: Presentation, state: dict):
 
     lines = []
     for key in keys:
-        text = _truncate(benchmark_results[key], 300)
+        text = _truncate(_clean_text(benchmark_results[key]), 300)
         lines.append(f"[{key}]")
         lines.append(f"  {text}")
         lines.append("")
@@ -239,7 +257,7 @@ def _slide_06_competitive(prs: Presentation, state: dict):
 
     lines = []
     for key in keys:
-        text = _truncate(benchmark_results[key], 300)
+        text = _truncate(_clean_text(benchmark_results[key]), 300)
         lines.append(f"[{key}]")
         lines.append(f"  {text}")
         lines.append("")
@@ -248,7 +266,7 @@ def _slide_06_competitive(prs: Presentation, state: dict):
         # Fall back to showing all if fewer than 4 benchmarks total
         all_keys = list(benchmark_results.keys())
         for key in all_keys:
-            text = _truncate(benchmark_results[key], 200)
+            text = _truncate(_clean_text(benchmark_results[key]), 200)
             lines.append(f"[{key}]: {text}")
             lines.append("")
 
@@ -269,9 +287,8 @@ def _slide_07_gap_analysis(prs: Presentation, state: dict):
 
     for branch in branches:
         area = branch.get("name", "Unknown")[:25]
-        bench_text = benchmark_results.get(branch.get("name", ""), "")
+        bench_text = _clean_text(benchmark_results.get(branch.get("name", ""), ""))
         # Extract a benchmark figure if present (heuristic: first number + % or ratio)
-        import re
         nums = re.findall(r'\d+\.?\d*\s*%', bench_text)
         benchmark_fig = nums[0] if nums else "See benchmark data"
         lines.append(f"  {area:<27} | Under review   | {benchmark_fig}")
@@ -296,7 +313,7 @@ def _slide_08_root_cause(prs: Presentation, state: dict):
     supporting = ""
     if benchmark_results:
         first_val = next(iter(benchmark_results.values()))
-        supporting = _truncate(first_val, 250)
+        supporting = _truncate(_clean_text(first_val), 250)
 
     lines = [
         f"Problem Classification: {problem_type.upper()}",

@@ -21,6 +21,7 @@ class AgentState(TypedDict, total=False):
     company_description: str
     problem_statement: str
     country: str
+    document_context: dict  # optional: {"type": "pdf"|"text", "name": str, "data": str}
     # problem_structurer outputs
     problem_type: str
     driver_tree: dict
@@ -67,6 +68,7 @@ def run_pipeline(
     company_description: str,
     problem_statement: str,
     country: str = "Korea",
+    document_context: dict = None,
 ) -> dict:
     graph = build_graph()
 
@@ -75,6 +77,8 @@ def run_pipeline(
         "problem_statement": problem_statement,
         "country": country,
     }
+    if document_context is not None:
+        initial_state["document_context"] = document_context
 
     final_state = graph.invoke(initial_state)
     return final_state
