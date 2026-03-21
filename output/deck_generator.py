@@ -3,7 +3,9 @@ import re
 from pathlib import Path
 
 from pptx import Presentation
+from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
+from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
@@ -118,6 +120,24 @@ def _truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars - 3] + "..."
+
+
+def _derive_position(area: str, revenue: str, employees: int, industry: str) -> str:
+    """Derive a company position description from available inputs."""
+    area_lower = area.lower()
+    if revenue:
+        if any(k in area_lower for k in ["revenue", "cost", "price", "margin", "profit"]):
+            return f"Rev: {revenue}"
+    if employees:
+        if any(k in area_lower for k in ["efficiency", "labor", "workforce", "productivity", "headcount"]):
+            return f"{employees} employees"
+    if industry:
+        return f"{industry} sector"
+    if revenue:
+        return f"Rev: {revenue}"
+    if employees:
+        return f"{employees} employees"
+    return "Input required"
 
 
 # --- Individual slide builders ---
@@ -282,8 +302,13 @@ def _slide_07_gap_analysis(prs: Presentation, state: dict):
     driver_tree = state.get("driver_tree", {})
     branches = driver_tree.get("branches", [])
 
-    lines = ["Area                        | Your Position  | Industry Benchmark",
-             "-" * 65]
+    # Build company position from state inputs
+    revenue = state.get("revenue_krw", "")
+    employees = state.get("employee_count", 0)
+    industry = state.get("industry", "")
+
+    lines = ["Area                        | Your Position          | Industry Benchmark",
+             "-" * 75]
 
     for branch in branches:
         area = branch.get("name", "Unknown")[:25]
@@ -291,9 +316,61 @@ def _slide_07_gap_analysis(prs: Presentation, state: dict):
         # Extract a benchmark figure if present (heuristic: first number + % or ratio)
         nums = re.findall(r'\d+\.?\d*\s*%', bench_text)
         benchmark_fig = nums[0] if nums else "See benchmark data"
-        lines.append(f"  {area:<27} | Under review   | {benchmark_fig}")
+        # Derive company position from available data
+        position = _derive_position(area, revenue, employees, industry)
+        lines.append(f"  {area:<27} | {position:<20} | {benchmark_fig}")
 
     _add_bullet_list(slide, lines)
+
+
+def _slide_07b_benchmark_chart(prs: Presentation, state: dict):
+    """Bar chart comparing benchmark figures across driver tree branches."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_bg(slide, WHITE)
+    _add_title_bar(slide, "Benchmark Comparison")
+
+    benchmark_results = state.get("benchmark_results", {})
+    driver_tree = state.get("driver_tree", {})
+    branches = driver_tree.get("branches", [])
+
+    if not branches or not benchmark_results:
+        _add_body_text(slide, "No benchmark data available for chart generation.")
+        return
+
+    # Extract numeric benchmarks from text
+    categories = []
+    values = []
+    for branch in branches:
+        name = branch.get("name", "Unknown")
+        bench_text = _clean_text(benchmark_results.get(name, ""))
+        nums = re.findall(r'(\d+\.?\d*)\s*%', bench_text)
+        if nums:
+            categories.append(name[:20])
+            values.append(float(nums[0]))
+
+    if len(categories) < 2:
+        _add_body_text(slide, "Insufficient numeric benchmark data for chart. See text analysis.")
+        return
+
+    chart_data = CategoryChartData()
+    chart_data.categories = categories
+    chart_data.add_series("Industry Benchmark (%)", values)
+
+    chart = slide.shapes.add_chart(
+        XL_CHART_TYPE.BAR_CLUSTERED,
+        Inches(1.5), Inches(1.5), Inches(10), Inches(5),
+        chart_data,
+    ).chart
+
+    chart.has_legend = False
+    plot = chart.plots[0]
+    plot.gap_width = 100
+
+    # Style the value axis
+    value_axis = chart.value_axis
+    value_axis.has_title = True
+    value_axis.axis_title.text_frame.paragraphs[0].text = "%"
+    value_axis.major_gridlines.format.line.color.rgb = RGBColor(0xE0, 0xE0, 0xE0)
 
 
 def _slide_08_root_cause(prs: Presentation, state: dict):
@@ -340,7 +417,7 @@ def _slide_09_recommendations(prs: Presentation, state: dict):
     lines = []
     for i, rec in enumerate(final_recs, 1):
         title = rec.get("title", f"Recommendation {i}")
-        desc = _truncate(rec.get("description", ""), 180)
+        desc = _truncate(rec.get("description", ""), 400)
         impact = rec.get("impact", "medium").upper()
         feasibility = rec.get("feasibility", "medium").upper()
         lines.append(f"{i}. {title}")
@@ -457,6 +534,7 @@ def generate_deck(state: dict, output_path: str = "output/consulting_deck.pptx")
     _slide_05_market_intel(prs, state)
     _slide_06_competitive(prs, state)
     _slide_07_gap_analysis(prs, state)
+    _slide_07b_benchmark_chart(prs, state)
     _slide_08_root_cause(prs, state)
     _slide_09_recommendations(prs, state)
     _slide_10_roadmap(prs, state)

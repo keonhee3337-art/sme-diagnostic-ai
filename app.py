@@ -39,6 +39,39 @@ with st.sidebar:
 
     country = st.selectbox("Country", options=["Korea", "Other"])
 
+    st.divider()
+    st.caption("Company Details (optional - improves personalization)")
+
+    revenue_krw = st.text_input(
+        "Annual Revenue",
+        placeholder="e.g. 50억원, 200억원",
+        help="Helps benchmark against similar-sized companies",
+    )
+
+    employee_count = st.number_input(
+        "Number of Employees",
+        min_value=0,
+        max_value=100000,
+        value=0,
+        help="0 = not specified",
+    )
+
+    industry = st.selectbox(
+        "Industry",
+        options=["", "Manufacturing", "Retail", "F&B", "IT Services", "Healthcare", "Construction", "Logistics", "Education", "Other"],
+        help="Targets benchmark research to your industry",
+    )
+
+    founded_year = st.number_input(
+        "Founded Year",
+        min_value=0,
+        max_value=2026,
+        value=0,
+        help="0 = not specified",
+    )
+
+    st.divider()
+
     uploaded_file = st.file_uploader(
         "Attach Document (optional)",
         type=["txt", "md", "pdf"],
@@ -85,7 +118,16 @@ if run_button:
     with st.spinner("Running diagnostic pipeline..."):
         try:
             from graph import run_pipeline
-            result = run_pipeline(company_description, problem_statement, country, document_context)
+            result = run_pipeline(
+                company_description,
+                problem_statement,
+                country,
+                document_context,
+                revenue_krw=revenue_krw,
+                employee_count=int(employee_count),
+                industry=industry,
+                founded_year=int(founded_year),
+            )
             st.session_state["diagnostic_result"] = result
             st.session_state["run_complete"] = True
             st.session_state["followup_history"] = []
@@ -199,22 +241,35 @@ if st.session_state.get("run_complete") and "diagnostic_result" in st.session_st
 
                     _client = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-                    # Build context summary from diagnostic result
+                    # Build enriched context from diagnostic result + company inputs
                     recs_summary = "\n".join(
-                        f"- {r.get('title', '')}: {r.get('description', '')[:120]}"
-                        for r in result.get("final_recommendations", [])[:3]
+                        f"- {r.get('title', '')}: {r.get('description', '')}"
+                        for r in result.get("final_recommendations", [])
                     )
                     driver_tree = result.get("driver_tree", {})
                     root_problem = driver_tree.get("root", "")
                     hypotheses = result.get("hypotheses", [])
+                    benchmarks = "\n".join(
+                        f"[{k}]: {v[:300]}" for k, v in result.get("benchmark_results", {}).items()
+                    )
+
+                    company_profile = ""
+                    if result.get("revenue_krw"):
+                        company_profile += f"Revenue: {result['revenue_krw']}. "
+                    if result.get("employee_count"):
+                        company_profile += f"Employees: {result['employee_count']}. "
+                    if result.get("industry"):
+                        company_profile += f"Industry: {result['industry']}. "
 
                     context_block = (
                         f"Company: {result.get('company_description', '')}\n"
-                        f"Problem: {result.get('problem_statement', '')}\n"
+                        + (f"Company profile: {company_profile}\n" if company_profile else "")
+                        + f"Problem: {result.get('problem_statement', '')}\n"
                         f"Root issue diagnosed: {root_problem}\n"
                         f"Problem type: {result.get('problem_type', 'unknown')}\n"
                         f"Key hypotheses: {'; '.join(hypotheses[:3])}\n"
-                        f"Top recommendations:\n{recs_summary}"
+                        f"Benchmark data:\n{benchmarks}\n"
+                        f"All recommendations:\n{recs_summary}"
                     )
 
                     # Include previous follow-up exchanges for continuity
@@ -226,7 +281,7 @@ if st.session_state.get("run_complete") and "diagnostic_result" in st.session_st
 
                     response = _client.messages.create(
                         model="claude-sonnet-4-6",
-                        max_tokens=1024,
+                        max_tokens=2048,
                         system=(
                             "You are a McKinsey-trained consulting advisor. "
                             "Answer follow-up questions about the business diagnostic below. "

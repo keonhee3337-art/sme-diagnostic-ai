@@ -24,7 +24,7 @@ def _query_perplexity(query: str) -> str:
     payload = {
         "model": PERPLEXITY_MODEL,
         "messages": [{"role": "user", "content": query}],
-        "max_tokens": 512,
+        "max_tokens": 1024,
     }
 
     response = requests.post(PERPLEXITY_URL, headers=headers, json=payload, timeout=30)
@@ -42,11 +42,19 @@ def run_benchmark_research(state: dict) -> dict:
 
     # TODO: dart-fss peer comparison for Korean companies
 
+    industry = state.get("industry", "")
+    revenue = state.get("revenue_krw", "")
+    employees = state.get("employee_count", 0)
+
     for i, branch in enumerate(branches):
         branch_name = branch.get("name", f"branch_{i}")
-        query = (
-            f"{branch_name} benchmark data: industry average, trend, competitive landscape"
-        )
+        query = f"{branch_name} benchmark data: industry average, trend, competitive landscape"
+        if industry:
+            query += f" for {industry} companies"
+        if revenue:
+            query += f" with annual revenue around {revenue}"
+        elif employees:
+            query += f" with {employees} employees"
         if country == "Korea":
             query += " in Korea"
 

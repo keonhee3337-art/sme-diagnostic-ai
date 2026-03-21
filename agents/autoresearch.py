@@ -75,8 +75,20 @@ def _generate_recommendations(client: anthropic.Anthropic, state: dict) -> list[
     hypotheses = state.get("hypotheses", [])
     problem_type = state.get("problem_type", "unknown")
 
+    # Build company context for personalized recommendations
+    company_context = ""
+    if state.get("revenue_krw"):
+        company_context += f"Annual revenue: {state['revenue_krw']}. "
+    if state.get("employee_count"):
+        company_context += f"Employees: {state['employee_count']}. "
+    if state.get("industry"):
+        company_context += f"Industry: {state['industry']}. "
+    if company_context:
+        company_context = f"Company profile: {company_context}Recommendations must be feasible at this scale.\n\n"
+
     user_message = (
-        f"Problem type: {problem_type}\n\n"
+        company_context
+        + f"Problem type: {problem_type}\n\n"
         f"Driver tree:\n{json.dumps(driver_tree, ensure_ascii=False, indent=2)}\n\n"
         f"Hypotheses:\n" + "\n".join(f"- {h}" for h in hypotheses) + "\n\n"
         f"Benchmark findings:\n"
@@ -85,7 +97,7 @@ def _generate_recommendations(client: anthropic.Anthropic, state: dict) -> list[
 
     response = client.messages.create(
         model=SONNET_MODEL,
-        max_tokens=2048,
+        max_tokens=4096,
         system=GENERATION_SYSTEM,
         messages=[{"role": "user", "content": user_message}],
     )
@@ -146,7 +158,7 @@ def _improve_recommendations(
 
     response = client.messages.create(
         model=SONNET_MODEL,
-        max_tokens=2048,
+        max_tokens=4096,
         system=IMPROVEMENT_SYSTEM,
         messages=[{"role": "user", "content": user_message}],
     )

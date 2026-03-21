@@ -22,6 +22,11 @@ class AgentState(TypedDict, total=False):
     problem_statement: str
     country: str
     document_context: dict  # optional: {"type": "pdf"|"text", "name": str, "data": str}
+    # Company-specific inputs for personalization
+    revenue_krw: str        # e.g. "50억원"
+    employee_count: int
+    industry: str           # e.g. "manufacturing", "retail", "F&B", "IT services"
+    founded_year: int
     # problem_structurer outputs
     problem_type: str
     driver_tree: dict
@@ -69,6 +74,10 @@ def run_pipeline(
     problem_statement: str,
     country: str = "Korea",
     document_context: dict = None,
+    revenue_krw: str = "",
+    employee_count: int = 0,
+    industry: str = "",
+    founded_year: int = 0,
 ) -> dict:
     graph = build_graph()
 
@@ -79,6 +88,14 @@ def run_pipeline(
     }
     if document_context is not None:
         initial_state["document_context"] = document_context
+    if revenue_krw:
+        initial_state["revenue_krw"] = revenue_krw
+    if employee_count:
+        initial_state["employee_count"] = employee_count
+    if industry:
+        initial_state["industry"] = industry
+    if founded_year:
+        initial_state["founded_year"] = founded_year
 
     final_state = graph.invoke(initial_state)
     return final_state
