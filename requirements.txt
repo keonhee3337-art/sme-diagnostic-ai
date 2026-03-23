@@ -1,6 +1,6 @@
 anthropic
 python-dotenv
 requests
-langgraph>=0.2.0
+langgraph>=1.0.0
 python-pptx
 streamlit>=1.40.0
